@@ -1,0 +1,33 @@
+# astrolift-sample-function — Knative Serving function (spec-42 R5 / §4 FUNCTION).
+#
+# Renders to a `serving.knative.dev/v1` Service. Knative's autoscaler owns the
+# replica count and implements scale-to-zero via `min_scale = 0` (no Deployment,
+# no HPA). The TOML keys below map to the backend parser as:
+#   concurrency       -> Knative spec.template.spec.containerConcurrency
+#   timeout_seconds   -> Knative spec.template.spec.timeoutSeconds
+#   min_scale/max_scale -> autoscaling.knative.dev/{minScale,maxScale} annotations
+name = "sample-function"
+
+[[workloads]]
+name = "fn"
+kind = "function"
+min_scale = 0          # scale-to-zero: no pods when idle
+max_scale = 5          # autoscaler ceiling
+concurrency = 10       # in-flight requests per pod before scaling out
+timeout_seconds = 60   # max request duration
+
+  [[workloads.containers]]
+  name = "fn"
+  is_primary = true
+  image_ref = "docker.io/calliopeai/astrolift-sample-function:main-<sha>"
+  port = 8080
+
+    [workloads.containers.env]
+    LOG_LEVEL = "info"
+
+    # Knative manages its own request readiness; this block is authored per the
+    # spec-42 §3.1 /health contract and parses cleanly on a function container.
+    [workloads.containers.healthcheck]
+    kind = "http"
+    value = "/health"
+    port = 8080

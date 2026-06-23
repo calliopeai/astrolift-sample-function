@@ -1,0 +1,5 @@
+# Deliberately minimal — fewer/smaller deps mean a faster Knative cold start.
+# Flask is the WSGI app; gunicorn is the production server (the container
+# entrypoint). Pinned for reproducible image builds.
+Flask==3.0.3
+gunicorn==22.0.0

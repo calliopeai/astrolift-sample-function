@@ -1,0 +1,72 @@
+name: Build and Publish Function Image
+
+# Builds the sample-function image and pushes to Docker Hub
+# (docker.io/calliopeai/astrolift-sample-function). Mirrors the publish path of
+# astrolift-agents/.github/workflows/build-images.yml: docker/login-action@v3
+# with the org-level DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets (visibility=ALL,
+# inherited by all calliopeai repos). Deterministic main-<sha7> tags for deploy
+# plus a moving :latest. Pushes only on main; PRs build without pushing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "requirements.txt"
+      - "Dockerfile"
+  workflow_dispatch:
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  NAMESPACE: calliopeai
+  IMAGE: astrolift-sample-function
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: tags
+        run: |
+          echo "sha=main-${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$GITHUB_OUTPUT"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "push=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "push=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Docker Hub
+        if: steps.tags.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          img="${REGISTRY_DOCKERHUB}/${NAMESPACE}/${IMAGE}"
+          docker build \
+            --build-arg "GIT_SHA=${{ steps.tags.outputs.sha }}" \
+            --build-arg "IMAGE_REF=${img}:${{ steps.tags.outputs.sha }}" \
+            --build-arg "BUILT_AT=${{ steps.tags.outputs.built_at }}" \
+            -t "${img}:${{ steps.tags.outputs.sha }}" \
+            -t "${img}:latest" \
+            .
+
+      - name: Push tags (Docker Hub)
+        if: steps.tags.outputs.push == 'true'
+        run: |
+          img="${REGISTRY_DOCKERHUB}/${NAMESPACE}/${IMAGE}"
+          docker push "${img}:${{ steps.tags.outputs.sha }}"
+          docker push "${img}:latest"
