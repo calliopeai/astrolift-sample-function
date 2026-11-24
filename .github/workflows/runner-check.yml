@@ -1,0 +1,18 @@
+# One job on the calliopeai-astro scale set, to prove it takes jobs. Delete after the check.
+name: runner check
+
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  by-name:
+    runs-on: calliopeai-astro
+    timeout-minutes: 10
+    steps:
+      - run: |
+          echo "runner: $RUNNER_NAME"
+          nproc
+          grep MemTotal /proc/meminfo
